@@ -1,0 +1,30 @@
+<div class="page-content promo-detail-page p-t50 p-b50">
+  <div class="container">
+
+    <div class="promo-detail-card" *ngIf="promo">
+
+      <div class="promo-hero-img">
+        <img [src]="promo.files?.[0] || 'assets/img/default.jpg'" alt="Promoción">
+      </div>
+
+      <div class="promo-detail-content">
+        <span class="promo-chip">Promoción OnGo</span>
+
+        <h1>{{ promo.name }}</h1>
+
+        <p>{{ promo.description }}</p>
+
+        <div class="promo-price-box" *ngIf="promo.price">
+          <span>Precio</span>
+          <strong>{{ promo.price | currency:'COP':'symbol':'1.0-0' }}</strong>
+        </div>
+
+        <button type="button" class="buy-promo-btn" (click)="buyPromo()">
+          Comprar promoción
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,59 @@
+<div class="map-wrapper">
+
+  <!-- MAPA -->
+  <div class="map-container" #mapContainer></div>
+
+  <!-- 🔝 OVERLAY SUPERIOR -->
+  <div class="map-overlay-top">
+    <div class="live-card">
+      <h2>
+        <i class="fas fa-fire"></i>
+        {{ totalActiveUsers || 0 }} personas cerca
+      </h2>
+
+      <p *ngIf="nearbyUsers[0]?.distanceKm !== null">
+        Persona más cercana a
+        {{ nearbyUsers[0]?.distanceKm | number:'1.1-1' }} km
+      </p>
+
+     <!--  <div class="avatars">
+        <img *ngFor="let user of activeUsersPreview" [src]="user.avatar || 'assets/images/user.png'"
+          (error)="$any($event.target).src='assets/images/user.png'" />
+        <span *ngIf="extraUsers > 0">+{{ extraUsers }}</span>
+      </div> -->
+       <p *ngIf="!nearbyUsers.length">
+        Buscando personas cerca de ti
+      </p>
+    </div>
+  </div>
+
+  <!-- 🔥 BOTÓN RADAR -->
+  <button class="radar-floating" (click)="goRadar()">
+    CONECTAR
+  </button>
+
+  <!-- 🔻 OVERLAY INFERIOR -->
+  <div class="map-overlay-bottom">
+    <div class="activity-card">
+      <h4>Lo que está pasando ahora</h4>
+
+      <div class="stats">
+        <div>
+          <strong>{{ matchesNow || 0 }}</strong>
+          <span>Matches ahora</span>
+        </div>
+
+        <div>
+          <strong>{{ newUsers || 0 }}</strong>
+          <span>Personas nuevas</span>
+        </div>
+
+        <div>
+          <strong>{{ viewsToday || 0 }}</strong>
+          <span>Te han visto</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

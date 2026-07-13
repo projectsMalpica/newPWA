@@ -1,0 +1,564 @@
+<div class="page-content radar-page p-b65">
+  <div class="container fixed-full-area">
+
+    <!-- Header Radar -->
+    <section class="radar-header">
+
+      <div class="radar-header-info">
+        <span class="radar-label">⚡ Conecta cerca de ti</span>
+        <p>Desliza para conectar o toca dos veces para abrir chat.</p>
+      </div>
+
+      <div class="radar-header-actions">
+
+        <button type="button" class="filter-main-btn compact" (click)="toggleFilters()">
+
+          <i class="fa-solid fa-sliders"></i>
+
+          <strong *ngIf="getActiveFiltersCount()">
+            {{ getActiveFiltersCount() }}
+          </strong>
+        </button>
+
+        <button type="button" class="radar-map-btn" routerLink="/maps">
+
+          <i class="fas fa-map-marker-alt"></i>
+
+        </button>
+
+      </div>
+
+    </section>
+    <section class="radar-mode-tabs">
+
+      <!-- <button type="button" [class.active]="activeRadarMode === 'all'" (click)="setRadarMode('all')">
+        Todos 🔒
+      </button> -->
+
+      <button type="button" [class.active]="activeRadarMode === 'local'" (click)="setRadarMode('local')">
+        En mi local
+      </button>
+
+      <button type="button" [class.active]="activeRadarMode === 'hotzone'" (click)="setRadarMode('hotzone')">
+        Zona caliente 🔥
+      </button>
+
+      <button type="button" [class.active]="activeRadarMode === 'nearby'" (click)="setRadarMode('nearby')">
+        Cerca de mí
+      </button>
+    </section>
+    <div *ngIf="loadingClients" class="empty-state">
+      Cargando perfiles...
+    </div>
+
+    <div class="dzSwipe_card-cont dz-gallery-slider" *ngIf="!loadingClients && clientes.length > 0">
+
+      <!-- Card siguiente -->
+      <div class="dzSwipe_card dzSwipe_card--next" *ngIf="nextProfile" style="height: 85%;">
+        <div class="dz-media">
+          <img [src]="nextProfile?.avatar || 'assets/images/hero-night.png'"
+            (error)="$any($event.target).src='assets/images/hero-night.png'" alt="" />
+        </div>
+
+        <div class="dz-content">
+          <div class="left-content">
+            <span class="badge badge-primary d-inline-flex gap-1 mb-2">
+              <i class="icon feather icon-map-pin"></i>
+              {{ nextProfile?.address || 'Cerca de ti' }}
+            </span>
+
+            <h4 class="title">
+              {{ nextProfile?.name || 'Usuario' }}
+            </h4>
+
+            <p class="mb-0">
+              <i class="icon feather icon-user"></i>
+              {{ nextProfile?.gender || 'Sin dato' }}
+            </p>
+          </div>
+
+          <a href="javascript:void(0);" class="dz-icon dz-sp-like">
+            <i class="flaticon flaticon-star-1"></i>
+          </a>
+        </div>
+
+        <div class="dzSwipe_card__option dzReject">
+          <i class="fa-solid fa-xmark"></i>
+        </div>
+
+        <div class="dzSwipe_card__option dzLike">
+          <i class="fa-solid fa-check"></i>
+        </div>
+
+        <div class="dzSwipe_card__option dzSuperlike">
+          <h5 class="title mb-0">Super Like</h5>
+        </div>
+
+        <div class="dzSwipe_card__drag"></div>
+      </div>
+
+      <!-- Card activa -->
+      <div class="dzSwipe_card dzSwipe_card--active" [ngStyle]="{ transform: transform }"
+        [class.is-locked]="isTransitioning || isSwipeActionPending"
+        [class.is-dragging]="isDragging"
+        (mousedown)="startDrag($event)" (mousemove)="onDrag($event)" (mouseup)="endDrag($event, currentProfile)"
+        (mouseleave)="endDrag($event, currentProfile)" (touchstart)="startDrag($event)"
+        (touchmove)="onDrag($event)" (touchend)="endDrag($event, currentProfile)"
+        (click)="handleCardTap(currentProfile)">
+
+        <div class="dz-media">
+          <img [src]="getCurrentPhoto(currentProfile)"
+            (error)="$any($event.target).src='assets/images/hero-night.png'" alt="" />
+        </div>
+
+        <!-- Indicadores de fotos -->
+        <div class="photo-indicators" *ngIf="getTotalPhotos(currentProfile) > 1">
+          <span *ngFor="let item of [].constructor(getTotalPhotos(currentProfile)); let i = index"
+            [class.active]="i === currentPhotoIndex">
+          </span>
+        </div>
+
+        <!-- Zonas invisibles para cambiar foto -->
+        <button type="button" class="photo-nav photo-nav-left" *ngIf="currentProfile?.photos?.length > 1"
+          (click)="prevPhoto($event)">
+        </button>
+
+        <button type="button" class="photo-nav photo-nav-right" *ngIf="currentProfile?.photos?.length > 1"
+          (click)="nextPhoto($event)">
+        </button>
+
+        <div class="profile-overlay">
+          <div class="profile-info">
+            <div class="live-distance-chip">
+              <i class="fa-solid fa-location-crosshairs"></i>
+              {{ getDistanceLabel(currentProfile) }}
+            </div>
+            <span class="status-badge ongo-presence" [ngClass]="getPresenceClass(currentProfile)">
+              {{ getPresenceLabel(currentProfile) }}
+            </span>
+
+            <h2 (click)="openProfile($event, currentProfile)">
+              {{ currentProfile?.name || 'Usuario' }}
+              <span *ngIf="currentProfile?.age">
+                {{ currentProfile?.age }}
+              </span>
+            </h2>
+
+            <!--  <p class="bio-preview">
+              {{ currentProfile?.Biography || currentProfile?.bio || 'Sin biografía disponible.' }}
+            </p> -->
+
+            <div class="profile-summary">
+
+              <div class="summary-chip" *ngIf="currentProfile?.gender">
+                <i class="icon feather icon-user"></i>
+                {{ currentProfile?.gender }}
+              </div>
+
+              <div class="summary-chip" *ngIf="currentProfile?.orientation">
+                <i class="icon feather icon-heart"></i>
+                {{ currentProfile?.orientation }}
+              </div>
+
+              <div class="summary-chip" *ngIf="currentProfile?.interestedIn">
+                <i class="icon feather icon-search"></i>
+                Busca {{ currentProfile?.interestedIn }}
+              </div>
+
+              <div class="summary-chip" *ngIf="currentProfile?.lookingFor">
+                <i class="icon feather icon-star"></i>
+                {{ currentProfile?.lookingFor }}
+              </div>
+
+              <div class="summary-chip" *ngIf="currentProfile?.language">
+                <i class="icon feather icon-globe"></i>
+                {{ currentProfile?.language }}
+              </div>
+
+              <div class="summary-chip" *ngIf="currentProfile?.address">
+                <i class="icon feather icon-map-pin"></i>
+                {{ currentProfile?.address }}
+              </div>
+
+              <div class="summary-chip" *ngIf="currentProfile?.interests">
+                <i class="icon feather icon-plus"></i>
+                {{ currentProfile?.interests }}
+              </div>
+
+            </div>
+            <div class="profile-actions">
+
+              <button class="view-profile-btn" type="button" (mousedown)="$event.stopPropagation()"
+                (mouseup)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()"
+                (touchend)="$event.stopPropagation()" (click)="openProfile($event, currentProfile)">
+
+                Ver perfil completo
+              </button>
+
+              <button class="gift-floating-btn" type="button" (click)="onGiftClick($event, currentProfile)">
+
+                <i class="fa-solid fa-martini-glass-citrus"></i>
+
+                <div class="gift-btn-text">
+                  <strong>Invitar un trago</strong>
+                  <span>Seleccionar regalo</span>
+                </div>
+
+                <div class="gift-glow"></div>
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="dzSwipe_card__option dzReject">
+          <i class="fa-solid fa-xmark"></i>
+        </div>
+
+        <div class="dzSwipe_card__option dzLike">
+          <i class="fa-solid fa-check"></i>
+        </div>
+
+        <div class="dzSwipe_card__option dzSuperlike">
+          <h5 class="title mb-0">Super Like</h5>
+        </div>
+
+        <div class="dzSwipe_card__drag"></div>
+      </div>
+
+      <!-- Botones flotantes fuera de la card -->
+      <div class="ongo-actions-bar" *ngIf="currentProfile">
+
+        <button type="button" class="ongo-action ghost" (click)="undoLastSwipe()">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>Volver</span>
+        </button>
+
+        <button type="button" class="ongo-action danger" [disabled]="isTransitioning || isSwipeActionPending" (click)="dislike(currentProfile)">
+          <i class="fa-solid fa-xmark"></i>
+          <span>Pasar</span>
+        </button>
+
+        <button type="button" class="ongo-action main" [disabled]="isTransitioning || isSwipeActionPending" (click)="like(currentProfile)">
+          <span class="pulse-ring"></span>
+          <i class="fa-solid fa-bolt"></i>
+          <span>Conectar</span>
+        </button>
+
+        <button type="button" class="ongo-action boost" [disabled]="isTransitioning || isSwipeActionPending" (click)="superLike(currentProfile)">
+          <i class="fa-solid fa-fire"></i>
+          <span>Intensificar</span>
+        </button>
+
+        <button type="button" class="ongo-action radar" [disabled]="isTransitioning || isSwipeActionPending" (click)="openChat(currentProfile)">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>Chat</span>
+        </button>
+
+      </div>
+
+    </div>
+    <div *ngIf="!loadingClients && activeRadarMode === 'hotzone' && hotZoneLocked" class="empty-state">
+
+      <h3>🔥 Zona caliente disponible</h3>
+
+      <p>
+        Activa tu suscripción para ver personas conectando en esta zona.
+      </p>
+
+      <button class="apply-filters-btn" type="button" (click)="openClientPlans()">
+        Activar zona caliente
+      </button>
+
+    </div>
+    <div *ngIf="
+    !loadingClients &&
+    activeRadarMode === 'hotzone' &&
+    !hotZoneLocked &&
+    clientes.length === 0
+  " class="empty-state">
+
+      <h3>🔥 No hay personas en esta zona caliente</h3>
+
+      <p>
+        Cuando haya usuarios activos en esta zona aparecerán aquí.
+      </p>
+
+    </div>
+    <div *ngIf="!loadingClients && activeRadarMode === 'local' && localFromHomeLocked" class="empty-state">
+
+      <h3>🔒 Ver el local desde casa es Pro</h3>
+
+      <p>
+        Activa el Plan Pro para ver quiénes están conectando dentro de los locales aunque no estés físicamente allí.
+      </p>
+
+      <button class="apply-filters-btn" type="button" (click)="openClientPlans()">
+        Ver Plan Pro
+      </button>
+
+    </div>
+    <!-- Usuario NO está dentro de ningún local -->
+    <div *ngIf="
+    !loadingClients &&
+    activeRadarMode === 'local' &&
+    !currentLocalId &&
+    !localFromHomeLocked
+  " class="empty-state">
+      <h3>No estás dentro de un local OnGo</h3>
+
+      <p>
+        Acércate a un local participante o explora el mapa para conectar.
+      </p>
+
+      <button class="apply-filters-btn" routerLink="/maps">
+
+        Ver locales cercanos
+
+      </button>
+
+    </div>
+
+    <!-- Está dentro de un local pero no hay personas -->
+    <div *ngIf="
+    !loadingClients &&
+    activeRadarMode === 'local' &&
+    currentLocalId &&
+    clientes.length === 0 &&
+    !localFromHomeLocked
+  " class="empty-state">
+      <h3>🍸 Aún no hay personas en este local</h3>
+
+      <p>
+        Cuando otros usuarios entren aparecerán aquí.
+      </p>
+
+    </div>
+    <div *ngIf="
+    !loadingClients &&
+    activeRadarMode === 'nearby' &&
+    clientes.length === 0
+  " class="empty-state">
+
+      <h3>📍 No hay personas cerca por ahora</h3>
+
+      <p>
+        Mostraremos usuarios activos hasta 500 metros de tu ubicación.
+      </p>
+
+      <button class="apply-filters-btn" routerLink="/maps">
+
+        Explorar mapa
+
+      </button>
+
+    </div>
+
+
+  </div>
+  <div class="filters-backdrop" *ngIf="showFilters" (click)="toggleFilters()"></div>
+
+  <section class="filters-sheet" *ngIf="showFilters">
+    <div class="filters-sheet-handle"></div>
+
+    <div class="filters-sheet-header">
+      <div>
+        <span>Radar OnGo</span>
+        <h3>Filtrar perfiles</h3>
+      </div>
+
+      <button type="button" (click)="toggleFilters()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="premium-filter-box" *ngIf="!hasClientProPlan()">
+
+      <h4>🔒 Filtros avanzados</h4>
+
+      <p>
+        Activa OnGo Premium o Platinum para filtrar por intereses, género y ubicación.
+      </p>
+
+      <button type="button" (click)="openClientPlans()">
+        Ver planes
+      </button>
+
+    </div>
+    <div class="filter-group" [class.locked-filter]="!hasClientProPlan()">
+      <label>Intereses</label>
+      <input type="text" [(ngModel)]="filters.interests" placeholder="Ej: bailar, música, viajes"
+        (input)="applyClientFilters()" />
+    </div>
+
+    <div class="filter-group" [class.locked-filter]="!hasClientProPlan()">
+      <label>Género</label>
+      <select [(ngModel)]="filters.gender" (change)="applyClientFilters()">
+        <option value="">Todos</option>
+        <option value="Masculino">Masculino</option>
+        <option value="Femenino">Femenino</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+
+    <div class="filter-group" [class.locked-filter]="!hasClientProPlan()">
+      <label>Ubicación</label>
+      <input type="text" [(ngModel)]="filters.address" placeholder="Ej: Medellín, Laureles, Poblado"
+        (input)="applyClientFilters()" />
+    </div>
+
+    <div class="filters-actions">
+      <button type="button" class="clear-filters-btn" (click)="clearClientFilters()">
+        Limpiar filtros
+      </button>
+
+      <button type="button" class="apply-filters-btn" (click)="toggleFilters()">
+        Aplicar filtros
+      </button>
+    </div>
+  </section>
+</div>
+<div class="ongo-match-overlay" *ngIf="showMatchOverlay">
+
+  <div class="match-particles">
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <button type="button" class="match-close" (click)="closeMatchOverlay()">
+    <i class="fa-solid fa-xmark"></i>
+  </button>
+
+  <div class="match-card connection-cinematic">
+    <div class="match-glow"></div>
+
+    <div class="match-avatar-wrap">
+      <span class="energy-orbit orbit-one"></span>
+      <span class="energy-orbit orbit-two"></span>
+
+      <img [src]="matchedClient?.avatar || 'assets/images/hero-night.png'" alt="perfil conectado" />
+    </div>
+
+    <span class="match-kicker">ONGO LIVE</span>
+    <div class="connection-signal">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <h2>⚡ CONEXIÓN EN TIEMPO REAL</h2>
+
+    <p class="match-name">
+      {{ matchedClient?.name || 'Alguien cerca de ti' }}
+      <span *ngIf="matchedClient?.age">{{ matchedClient?.age }}</span>
+    </p>
+
+    <p class="match-distance">
+      <i class="fa-solid fa-location-dot"></i>
+      {{ matchDistanceText }}
+    </p>
+
+    <div class="match-actions">
+      <button type="button" class="match-secondary" (click)="closeMatchOverlay()">
+        Seguir explorando
+      </button>
+
+      <button type="button" class="match-primary" (click)="openMatchedChat()">
+        Abrir chat
+      </button>
+    </div>
+
+  </div>
+</div>
+<!-- GIFT MODAL -->
+<div class="gift-modal-overlay" *ngIf="showGiftModal" (click)="closeGiftModal()">
+
+  <div class="gift-modal-card" (click)="$event.stopPropagation()">
+
+    <div class="gift-success-card" *ngIf="giftSentSuccess; else giftForm">
+
+      <div class="gift-success-icon">
+        <i class="fa-solid fa-check"></i>
+      </div>
+
+      <h3>Regalo listo para reclamar 🎁</h3>
+
+      <p>
+        Comparte este código con el cliente. El local deberá validarlo antes de entregar el producto.
+      </p>
+
+      <div class="redeem-code-box">
+        <small>Código de retiro</small>
+        <strong>{{ lastRedeemCode }}</strong>
+      </div>
+
+      <button type="button" class="send-gift-btn" (click)="copyRedeemCode()">
+        Copiar código
+      </button>
+
+      <button type="button" class="send-gift-btn secondary" (click)="closeGiftModal(true)">
+        Cerrar
+      </button>
+
+    </div>
+
+    <ng-template #giftForm>
+
+      <button type="button" class="gift-close" (click)="closeGiftModal()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="gift-header">
+
+        <h3>Invitar un trago 🍸</h3>
+
+        <p>
+          Para:
+          <strong>{{ giftReceiver?.name }}</strong>
+        </p>
+
+        <span class="wallet-balance">
+          Saldo:
+          {{ walletBalance | currency:'COP':'symbol':'1.0-0' }}
+        </span>
+
+      </div>
+
+      <div class="gift-products">
+
+        <button type="button" class="gift-product" *ngFor="let product of partnerProducts"
+          [class.active]="selectedGiftProduct?.id === product.id" (click)="selectedGiftProduct = product">
+
+          <img *ngIf="product.image" [src]="product.image" alt="gift">
+
+          <div class="gift-info">
+
+            <strong>{{ product.name }}</strong>
+
+            <small>{{ product.partnerName }}</small>
+
+            <span>
+              {{ product.price | currency:'COP':'symbol':'1.0-0' }}
+            </span>
+
+          </div>
+
+        </button>
+
+      </div>
+
+      <textarea [(ngModel)]="giftMessage" placeholder="Mensaje opcional...">
+    </textarea>
+
+      <button type="button" class="send-gift-btn" [disabled]="isSendingGift" (click)="sendGiftFromHome()">
+
+        {{ isSendingGift ? 'Enviando...' : 'Enviar regalo ' }}
+
+      </button>
+
+    </ng-template>
+
+  </div>
+</div>

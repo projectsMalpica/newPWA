@@ -1,0 +1,59 @@
+<!-- Header -->
+<header class="header header-fixed border-0">
+    <div class="container">
+        <div class="header-content">
+            <button type="button" class="menu-toggler" (click)="toggleSidebar()" style="background: transparent;">
+                <i class="icon feather icon-grid"></i>
+            </button>
+            <div class="mid-content header-logo">
+                <a (click)="goHome()">
+                    <img src="assets/images/logo.png" alt="">
+                </a>
+            </div>
+            <div class="right-content dz-meta">
+
+                <button type="button" class="filter-icon position-relative notification-trigger" (click)="toggleNotifications()">
+                    <i class="fa-solid fa-bell"></i>
+                    <span *ngIf="unreadCount$ | async as count" class="notification-badge">
+                        <span *ngIf="count > 0">
+                            {{ count }}
+                        </span>
+                    </span>
+                </button>
+
+                <div class="notifications-panel" *ngIf="showNotifications">
+                    <div class="notifications-panel-header">
+                        <strong>Notificaciones</strong>
+                        <button type="button" (click)="markAllAsRead()">Marcar leídas</button>
+                    </div>
+
+                    <div class="notifications-loading" *ngIf="loading$ | async">
+                        Cargando...
+                    </div>
+
+                    <ng-container *ngIf="!(loading$ | async)">
+                        <button
+                            type="button"
+                            class="notification-item"
+                            *ngFor="let item of notifications$ | async"
+                            [class.unread]="!item.read"
+                            (click)="openNotification(item)">
+                            <span class="notification-dot" *ngIf="!item.read"></span>
+                            <span class="notification-content">
+                                <strong>{{ item.title || 'OnGo' }}</strong>
+                                <small>{{ item.message || 'Nueva notificación' }}</small>
+                                <em>{{ relativeTime(item.created) }}</em>
+                            </span>
+                        </button>
+
+                        <div class="notifications-empty" *ngIf="(notifications$ | async)?.length === 0">
+                            Sin notificaciones
+                        </div>
+                    </ng-container>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</header>
+<!-- Header -->

@@ -1,0 +1,105 @@
+ <div class="menubar-area footer-fixed">
+  <div class="toolbar-inner menubar-nav">
+
+    <a
+      *ngIf="auth.isClient()"
+      class="nav-link"
+      routerLink="/maps"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Mapa">
+      <i class="fas fa-map-marker-alt"></i>
+    </a>
+
+    <a
+      *ngIf="auth.isPartner()"
+      class="nav-link"
+      routerLink="/home-local"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Inicio">
+      <i class="flaticon flaticon-dog-house"></i>
+    </a>
+
+    <a
+      *ngIf="auth.isClient()"
+      class="nav-link"
+      routerLink="/home"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Radar">
+      <i class="fas fa-fire"></i>
+    </a>
+
+    <a
+      *ngIf="auth.isClient()"
+      class="nav-link"
+      routerLink="/chat"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Chat">
+      <i class="flaticon flaticon-chat-1"></i>
+    </a>
+
+    <a
+      *ngIf="auth.isPartner()"
+      class="nav-link"
+      routerLink="/explorer"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Promociones">
+      <i class="flaticon flaticon-search"></i>
+    </a>
+
+    <a
+      *ngIf="auth.isClient()"
+      class="nav-link"
+      routerLink="/explorer"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Explorar">
+      <i class="flaticon flaticon-search"></i>
+    </a>
+
+    <a
+      *ngIf="auth.isPartner()"
+      class="nav-link"
+      routerLink="/profile-local"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Perfil">
+      <i class="flaticon flaticon-user"></i>
+    </a>
+
+    <a
+      *ngIf="auth.isClient()"
+      class="nav-link"
+      routerLink="/profile"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      title="Perfil">
+      <i class="flaticon flaticon-user"></i>
+    </a>
+
+  </div>
+</div> 
+
+<!-- <div class="menubar-area footer-fixed">
+  <div class="toolbar-inner menubar-nav">
+    <a class="nav-link" routerLink="/maps">
+      <i class="fas fa-map-marker-alt"></i>
+    </a>
+
+    <a class="nav-link" routerLink="/home">
+      <i class="fas fa-fire"></i>
+    </a>
+
+    <a class="nav-link" routerLink="/chat">
+      <i class="flaticon flaticon-chat-1"></i>
+    </a>
+
+    <a class="nav-link" routerLink="/profile">
+      <i class="flaticon flaticon-user"></i>
+    </a>
+  </div>
+</div> -->

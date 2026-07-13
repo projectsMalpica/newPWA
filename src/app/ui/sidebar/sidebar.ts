@@ -1,0 +1,103 @@
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { GlobalService } from '../../services/global.service';
+import { AuthPocketbaseService } from '../../services/authPocketbase.service';
+import { NotificationsService } from '../../services/NotificationsService.service';
+import { CommonModule } from '@angular/common';
+import { NavigationEnd, Router } from '@angular/router';
+import { SidebarService } from '../../services/sidebar.service';
+import { filter, Subscription } from 'rxjs';
+
+@Component({
+  selector: 'app-sidebar',
+  standalone: true,
+  imports: [CommonModule],
+  templateUrl: './sidebar.html',
+  styleUrl: './sidebar.scss',
+})
+export class Sidebar implements OnInit, OnDestroy {
+  clientes: any[] = [];
+  isOpen = false;
+
+  private sub = new Subscription();
+
+  constructor(
+    public global: GlobalService,
+    public auth: AuthPocketbaseService,
+    private notificationsService: NotificationsService,
+    public router: Router,
+    public sidebarService: SidebarService
+  ) {}
+
+  ngOnInit(): void {
+    this.sub.add(
+      this.sidebarService.isOpen$.subscribe(value => {
+        this.isOpen = value;
+      })
+    );
+
+    const currentUser = this.auth.getCurrentUser();
+    if (currentUser) {
+      this.auth.setUser(currentUser);
+    }
+
+    this.sub.add(
+      this.global.clientes$.subscribe((clientes: any[]) => {
+        this.clientes = clientes;
+      })
+    );
+
+    this.sub.add(
+      this.router.events
+        .pipe(filter(event => event instanceof NavigationEnd))
+        .subscribe(() => {
+          this.closeSidebar();
+        })
+    );
+
+    console.log('Avatar en profileData:', this.global.profileData.avatar);
+  }
+
+  goHome(): void {
+    this.closeSidebar();
+    this.router.navigate([this.auth.isPartner() ? '/home-local' : '/home']);
+  }
+
+  goProfile(): void {
+    this.closeSidebar();
+    this.router.navigate([this.auth.isPartner() ? '/profile-local' : '/profile']);
+  }
+goChats(): void {
+
+  // OCULTAR PARA LOCALES
+  if (this.global.profileDataPartner) {
+    return;
+  }
+
+  this.closeSidebar();
+  this.router.navigate(['/chat']);
+}
+
+  goWallet(): void {
+    this.closeSidebar();
+    this.router.navigate([this.auth.isPartner() ? '/wallet-partner' : '/wallet']);
+  }
+  goOrders(): void {
+    this.closeSidebar();
+    this.router.navigate([this.auth.isPartner() ? '/orders-partner' : '/my-orders']);
+  }
+
+  async logout(): Promise<void> {
+    this.closeSidebar();
+    await this.auth.logoutUser();
+    await this.notificationsService.unsubscribeFromRealtime();
+    this.router.navigate(['/login']);
+  }
+
+  closeSidebar(): void {
+    this.sidebarService.close();
+  }
+
+  ngOnDestroy(): void {
+    this.sub.unsubscribe();
+  }
+}
