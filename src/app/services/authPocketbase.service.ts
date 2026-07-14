@@ -197,6 +197,9 @@ export class AuthPocketbaseService {
     sessionStorage.removeItem('pendingGoogleUser');
     localStorage.removeItem('pendingGoogleToken');
     localStorage.removeItem('pendingGoogleUser');
+    this.global.pb.authStore.save(token, updatedUser);
+    this.currentUserSubject.next(finalUser);
+    this.startAuthenticatedSideEffects(googleUser.id);
     return profile;
   }
   /** Obtiene el perfil extendido según el type del user */
@@ -545,9 +548,7 @@ export class AuthPocketbaseService {
 
         this.currentUserSubject.next(user);
         this.global.pb.authStore.save(token, authData.record);
-        this.firebaseMessaging.registerTokenAfterLogin();
-        this.firebaseMessaging.initForegroundMessages();
-        this.notificationsService.initRealtimeNotifications(user.id);
+        this.startAuthenticatedSideEffects(user.id);
         // Guarda en localStorage
         /* this.setUser(user);
         localStorage.setItem('accessToken', token);
@@ -587,13 +588,23 @@ export class AuthPocketbaseService {
 
 
   async logoutUser(): Promise<any> {
-    await this.firebaseMessaging.unregisterTokenBeforeLogout();
-    await this.notificationsService.unsubscribeFromRealtime();
-    await this.pb.realtime.unsubscribe();
-    this.pb.authStore.clear();
-    /* localStorage.clear(); */
-    this.clearLocalSession();
-    this.global.setRoute('login');
+    try {
+      await this.firebaseMessaging.unregisterTokenBeforeLogout();
+    } catch (error) {
+      console.warn('[Auth] No se pudo desregistrar el token FCM:', error);
+    }
+
+    try {
+      await this.notificationsService.unsubscribeFromRealtime();
+      await this.pb.realtime.unsubscribe();
+    } catch (error) {
+      console.warn('[Auth] No se pudo cerrar realtime durante logout:', error);
+    } finally {
+      this.pb.authStore.clear();
+      this.clearLocalSession();
+      this.global.setRoute('login');
+    }
+
     return of(null);
   }
   normalizeUserType(type: any): 'admin' | 'partner' | 'client' | null {
@@ -757,6 +768,38 @@ export class AuthPocketbaseService {
     return false;
   }
 
+  private startAuthenticatedSideEffects(userId: string): void {
+    if (!userId) return;
+
+    void this.tryRegisterPushToken();
+    void this.tryInitForegroundMessages();
+    void this.tryInitRealtimeNotifications(userId);
+  }
+
+  async tryRegisterPushToken(): Promise<void> {
+    try {
+      await this.firebaseMessaging.registerTokenAfterLogin();
+    } catch (error) {
+      console.warn('[Auth] La autenticación fue exitosa, pero no se pudo registrar el token FCM:', error);
+    }
+  }
+
+  async tryInitForegroundMessages(): Promise<void> {
+    try {
+      await this.firebaseMessaging.initForegroundMessages();
+    } catch (error) {
+      console.warn('[Auth] La autenticación fue exitosa, pero FCM foreground no quedó disponible:', error);
+    }
+  }
+
+  async tryInitRealtimeNotifications(userId: string): Promise<void> {
+    try {
+      await this.notificationsService.initRealtimeNotifications(userId);
+    } catch (error) {
+      console.warn('[Auth] La autenticación fue exitosa, pero realtime de notificaciones no inició:', error);
+    }
+  }
+
   async requestPasswordReset(email: string): Promise<void> {
     try {
       await this.pb.collection('users').requestPasswordReset(email);
@@ -777,6 +820,8 @@ export class AuthPocketbaseService {
     }
   }
   async loginWithGoogle(): Promise<any> {
+    console.log('[Google OAuth] Inicio');
+
     const authData = await this.pb.collection('users').authWithOAuth2({
       provider: 'google',
     });
@@ -789,8 +834,13 @@ export class AuthPocketbaseService {
       throw new Error('Google autenticó, pero no devolvió usuario válido.');
     }
 
+    console.log('[Google OAuth] Respuesta recibida', {
+      hasToken: !!token,
+      userId: record.id,
+    });
+
     const rawType = record['type'];
-    const type = Array.isArray(rawType) ? rawType[0] : rawType;
+    const type = this.normalizeUserType(rawType);
 
     const googleEmail =
       meta?.email ||
@@ -817,10 +867,10 @@ export class AuthPocketbaseService {
 
     localStorage.setItem('pendingGoogleToken', token);
     localStorage.setItem('pendingGoogleUser', JSON.stringify(cleanUser));
+    this.pb.authStore.save(token, record);
+    this.global.pb.authStore.save(token, record);
 
     if (!type) {
-      this.pb.authStore.clear();
-
       localStorage.removeItem('accessToken');
       localStorage.removeItem('userId');
       localStorage.removeItem('user');
@@ -841,8 +891,6 @@ export class AuthPocketbaseService {
     });
 
     if (!profileStatus.profile) {
-      this.pb.authStore.clear();
-
       localStorage.removeItem('accessToken');
       localStorage.removeItem('userId');
       localStorage.removeItem('user');
@@ -864,20 +912,18 @@ export class AuthPocketbaseService {
       type
     };
 
-    this.pb.authStore.save(token, record);
     this.currentUser = finalUser;
 
     localStorage.setItem('accessToken', token);
     localStorage.setItem('userId', record.id);
     localStorage.setItem('user', JSON.stringify(finalUser));
     localStorage.setItem('record', JSON.stringify(record));
-    localStorage.setItem('type', JSON.stringify(type));
+    localStorage.setItem('type', type);
     localStorage.setItem('isLoggedin', 'true');
-    this.global.pb.authStore.save(token, record);
     this.currentUserSubject.next(finalUser);
-    this.firebaseMessaging.registerTokenAfterLogin();
-    this.firebaseMessaging.initForegroundMessages();
-    this.notificationsService.initRealtimeNotifications(record.id);
+    console.log('[Google OAuth] Perfil validado');
+    this.startAuthenticatedSideEffects(record.id);
+    console.log('[Google OAuth] Autenticación completada');
 
     return {
       needsRegister: false,

@@ -17,34 +17,43 @@ export class FirebaseMessagingService {
   private messaging: any = null;
   private onMessageReady = false;
   private registeringToken = false;
-  private lastRegisteredToken = localStorage.getItem('ongo_fcm_registered_token') || '';
+  private lastRegisteredToken = '';
 
   constructor(
     private pushApi: PushApiService,
     private toastService: ToastService
-  ) {}
+  ) {
+    if (this.isBrowser()) {
+      this.lastRegisteredToken = localStorage.getItem('ongo_fcm_registered_token') || '';
+    }
+  }
 
-  async registerTokenAfterLogin(): Promise<void> {
-    if (this.registeringToken || typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission === 'denied') return;
+  async registerTokenAfterLogin(): Promise<string | null> {
+    if (this.registeringToken || !this.canUseNotifications()) return null;
+    if (Notification.permission === 'denied') return null;
 
     this.registeringToken = true;
 
     try {
+      if (!environment.firebaseVapidKey) return null;
+
       const permission = Notification.permission === 'granted'
         ? 'granted'
         : await Notification.requestPermission();
 
-      if (permission !== 'granted') return;
+      if (permission !== 'granted') return null;
 
       const token = await this.getCurrentToken();
-      if (!token || token === this.lastRegisteredToken) return;
+      if (!token) return null;
+      if (token === this.lastRegisteredToken) return token;
 
       await this.pushApi.registerToken(token, 'web');
       this.lastRegisteredToken = token;
       localStorage.setItem('ongo_fcm_registered_token', token);
+      return token;
     } catch (error) {
       console.warn('[FirebaseMessagingService] No se pudo registrar FCM:', error);
+      return null;
     } finally {
       this.registeringToken = false;
     }
@@ -64,7 +73,7 @@ export class FirebaseMessagingService {
   }
 
   async initForegroundMessages(): Promise<void> {
-    if (this.onMessageReady || typeof window === 'undefined' || !('Notification' in window)) return;
+    if (this.onMessageReady || !this.canUseNotifications()) return;
 
     try {
       await this.ensureMessaging();
@@ -84,6 +93,8 @@ export class FirebaseMessagingService {
   }
 
   private async getCurrentToken(): Promise<string> {
+    if (!this.canUseServiceWorker() || !environment.firebaseVapidKey) return '';
+
     await this.ensureMessaging();
     if (!this.messaging) return '';
 
@@ -98,6 +109,8 @@ export class FirebaseMessagingService {
   }
 
   private async ensureMessaging(): Promise<void> {
+    if (!this.isBrowser()) return;
+
     await this.loadFirebaseSdk();
 
     const firebase = window.firebase;
@@ -117,6 +130,7 @@ export class FirebaseMessagingService {
 
   private loadFirebaseSdk(): Promise<void> {
     if (this.sdkPromise) return this.sdkPromise;
+    if (!this.isBrowser()) return Promise.resolve();
 
     this.sdkPromise = this.loadScript('https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js')
       .then(() => this.loadScript('https://www.gstatic.com/firebasejs/10.12.4/firebase-messaging-compat.js'));
@@ -126,6 +140,11 @@ export class FirebaseMessagingService {
 
   private loadScript(src: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (!this.isBrowser()) {
+        resolve();
+        return;
+      }
+
       if (document.querySelector(`script[src="${src}"]`)) {
         resolve();
         return;
@@ -138,5 +157,22 @@ export class FirebaseMessagingService {
       script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
       document.head.appendChild(script);
     });
+  }
+
+  private isBrowser(): boolean {
+    return typeof window !== 'undefined' && typeof document !== 'undefined';
+  }
+
+  private canUseNotifications(): boolean {
+    return this.isBrowser() &&
+      'Notification' in window &&
+      this.canUseServiceWorker();
+  }
+
+  private canUseServiceWorker(): boolean {
+    return typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      window.isSecureContext;
   }
 }

@@ -51,6 +51,7 @@ export class RegisterComponent {
   showPassword = false;
   showConfirmPassword = false;
   loadingGoogle = false;
+  statsLoading = false;
   nearbyPerson: any = null;
   nearbyCount = 0;
   possibleMatches = 0;
@@ -163,39 +164,51 @@ export class RegisterComponent {
         }
       }
     });
-    this.loadHeroStats();
+    void this.loadHeroStats();
   }
   async loadHeroStats() {
     const pb = this.global.pb;
+    this.statsLoading = true;
 
     try {
-      const users = await pb.collection('usuariosClient').getFullList({
-        sort: '-locationUpdatedAt',
-        filter: 'lat != null && lng != null',
+      const users = await pb.collection('usuariosClient').getList(1, 1, {
+        sort: '-updated',
       });
 
-      this.nearbyCount = users.length;
+      this.nearbyCount = users.totalItems;
 
-      this.nearbyPerson = users.find((u: any) => u.avatar) || users[0] || null;
+      this.nearbyPerson = users.items[0] || null;
 
       if (this.global.profileData?.id) {
         const myProfileId = this.global.profileData.id;
 
-        const receivedSwipes = await pb.collection('swipes').getFullList({
-          filter: `clientId="${myProfileId}" && (action="like" || action="superlike")`,
-        });
+        try {
+          const receivedSwipes = await pb.collection('swipes').getList(1, 1, {
+            filter: `clientId="${myProfileId}" && (action="like" || action="superlike")`,
+          });
 
-        this.possibleMatches = receivedSwipes.length;
+          this.possibleMatches = receivedSwipes.totalItems;
+        } catch (error) {
+          console.warn('[Register] No se pudieron cargar matches potenciales:', error);
+          this.possibleMatches = 3;
+        }
       } else {
         this.possibleMatches = 3;
       }
 
-    } catch (error) {
-      console.error('Error cargando hero stats:', error);
+    } catch (error: any) {
+      console.warn('[Register] No se pudieron cargar las estadísticas públicas:', {
+        status: error?.status,
+        message: error?.message,
+        data: error?.data,
+        response: error?.response
+      });
 
       this.nearbyCount = 0;
-      this.possibleMatches = 0;
+      this.possibleMatches = 3;
       this.nearbyPerson = null;
+    } finally {
+      this.statsLoading = false;
     }
   }
   validateOpeningHours(control: AbstractControl): ValidationErrors | null {
@@ -1116,11 +1129,18 @@ export class RegisterComponent {
 
       this.auth.pb.authStore.save(token, authUser);
 
-      await this.auth.pb.collection('users').update(authUser.id, {
+      const userUpdate: Record<string, unknown> = {
         type,
         name: authUser.name || authUser.username || '',
-        username: authUser.username || authUser.name || authUser.email?.split('@')[0] || ''
-      });
+      };
+
+      if (!authUser.username) {
+        userUpdate['username'] = this.auth.makeSafeUsername(
+          `${authUser.name || authUser.email?.split('@')[0] || 'usuario'}_${authUser.id}`
+        );
+      }
+
+      await this.auth.pb.collection('users').update(authUser.id, userUpdate);
 
       if (type === 'client') {
         this.clientForm.patchValue({

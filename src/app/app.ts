@@ -6,11 +6,9 @@ import { Sidebar } from './ui/sidebar/sidebar';
 import { CommonModule } from '@angular/common';
 import { filter } from 'rxjs/operators';
 import { ToastService } from './services/ToastService.service';
-import { NotificationsService } from './services/NotificationsService.service';
 import { GlobalService } from './services/global.service';
 import { SwUpdate } from '@angular/service-worker';
 import { AuthPocketbaseService } from './services/authPocketbase.service';
-import { FirebaseMessagingService } from './services/firebase-messaging.service';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -46,11 +44,9 @@ export class App {
   deferredPrompt: BeforeInstallPromptEvent | null = null;
   constructor(
     private toastService: ToastService,
-    public notificationsService: NotificationsService,
     public global: GlobalService,
       private swUpdate: SwUpdate,
-      private auth: AuthPocketbaseService,
-      private firebaseMessaging: FirebaseMessagingService
+      private auth: AuthPocketbaseService
   ) 
   {
      this.router.events
@@ -85,30 +81,34 @@ export class App {
   }
   
  async ngOnInit() {
-  const restored = await this.auth.restoreSession();
+  try {
+    const restored = await this.auth.restoreSession();
 
-  if (!restored) {
-    console.warn('No se pudo restaurar sesión');
-    return;
+    if (!restored) {
+      console.warn('No se pudo restaurar sesión');
+      return;
+    }
+
+    const user = this.auth.pb.authStore.record || this.auth.pb.authStore.model;
+
+    if (!user?.id) {
+      console.warn('No hay usuario válido');
+      return;
+    }
+
+    this.global.pb.authStore.save(
+      this.auth.pb.authStore.token,
+      user
+    );
+
+    void this.auth.tryInitRealtimeNotifications(user.id);
+    void this.auth.tryInitForegroundMessages();
+    void this.auth.tryRegisterPushToken();
+
+    console.log('Sesión restaurada:', user.id);
+  } finally {
+    // El arranque no debe depender de Firebase, realtime ni push backend.
   }
-
-  const user = this.auth.pb.authStore.record || this.auth.pb.authStore.model;
-
-  if (!user?.id) {
-    console.warn('No hay usuario válido');
-    return;
-  }
-
-  this.global.pb.authStore.save(
-    this.auth.pb.authStore.token,
-    user
-  );
-
-  await this.notificationsService.initRealtimeNotifications(user.id);
-  await this.firebaseMessaging.initForegroundMessages();
-  await this.firebaseMessaging.registerTokenAfterLogin();
-
-  console.log('Sesión restaurada:', user.id);
 }
   checkForAppUpdates() {
   if (location.hostname === 'localhost') {
