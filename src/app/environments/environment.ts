@@ -4,7 +4,7 @@ export const environment = {
   WOMPI_PUBLIC_KEY: 'pub_test_W6tvBfniNct1v0wtAg0evTrGPii3FAeN',
   MAPBOX_PUBLIC_TOKEN: '',
   apiBase: '/api', 
-  pushBackendUrl: 'http://localhost:3001',
+  pushBackendUrl: 'https://ongomatch.com:3001',
   firebaseConfig: {
     apiKey: 'AIzaSyC04c_cA4SrizMvvF67iMq9pkbiQ3wrq8I',
     authDomain: 'ongo-36a8f.firebaseapp.com',
