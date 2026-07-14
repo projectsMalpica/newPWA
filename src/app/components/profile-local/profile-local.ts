@@ -123,6 +123,7 @@ loadingStats = false;
   ticketRedeemLoading = false;
   ticketRedeemMessage = '';
   ticketRedeemError = '';
+  isSavingProfile = false;
   constructor(
     public global: GlobalService,
     public auth: AuthPocketbaseService,
@@ -915,8 +916,15 @@ loadingStats = false;
 
 
   onAvatarSelected(event: any) {
-    const file = event.target.files[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (file) {
+      if (!this.isAllowedImage(file)) {
+        this.showAppToast('Usa una imagen JPG, PNG o WEBP.', 'error');
+        input.value = '';
+        return;
+      }
+
       this.newAvatar = file;
       const reader = new FileReader();
       reader.onload = () => {
@@ -946,15 +954,25 @@ loadingStats = false;
     }
   }
   onPhotoSelected(event: any, index: number) {
-    const file = event.target.files[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (file) {
-      // Crear URL temporal para previsualización
+      if (!this.isAllowedImage(file)) {
+        this.showAppToast('Usa una imagen JPG, PNG o WEBP.', 'error');
+        input.value = '';
+        return;
+      }
+
       const url = URL.createObjectURL(file);
       this.photosPartner[index] = {
         url: url,
         file: file
       };
     }
+  }
+
+  private isAllowedImage(file: File): boolean {
+    return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
   }
   editProfile() {
     this.isEditProfile = true;
@@ -970,7 +988,10 @@ loadingStats = false;
   }
 
   async saveProfile() {
+    if (this.isSavingProfile) return;
+
     try {
+      this.isSavingProfile = true;
       const userId = this.auth.currentUser?.id;
 
       if (!userId) {
@@ -1143,6 +1164,15 @@ loadingStats = false;
 
       this.avatarPreview = null;
       this.newAvatar = null;
+      this.photosPartner = normalizedFiles.map((url: string) => ({
+        url,
+        file: null
+      }));
+
+      while (this.photosPartner.length < 6) {
+        this.photosPartner.push({ url: '', file: null });
+      }
+
       this.isEditProfile = false;
 
       /* setTimeout(() => {
@@ -1167,6 +1197,9 @@ loadingStats = false;
       }
 
       this.showAppToast('No se pudo guardar el perfil', 'error');
+    } finally {
+      this.isSavingProfile = false;
+      this.cdr.detectChanges();
     }
   }
 

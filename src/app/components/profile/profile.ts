@@ -54,6 +54,8 @@ export class Profile implements OnInit, AfterViewInit, OnDestroy {
   };
   isSaving = false;
   photos: any[] = Array(6).fill({});
+  galleryOpen = false;
+  galleryIndex = 0;
   selectedInterests: string[] = [];
   interestSearch: string = '';
   allInterests: string[] = [
@@ -526,6 +528,35 @@ isPlanButtonDisabled(plan: any): boolean {
     return photosArray;
   }
 
+  get visiblePhotos(): any[] {
+    return this.photos.filter(photo => !!photo?.url);
+  }
+
+  openGallery(index: number) {
+    const photos = this.visiblePhotos;
+    if (!photos.length) return;
+
+    this.galleryIndex = Math.max(0, Math.min(index, photos.length - 1));
+    this.galleryOpen = true;
+  }
+
+  closeGallery() {
+    this.galleryOpen = false;
+  }
+
+  nextPhoto() {
+    const total = this.visiblePhotos.length;
+    if (!total) return;
+
+    this.galleryIndex = Math.min(this.galleryIndex + 1, total - 1);
+  }
+
+  prevPhoto() {
+    if (this.galleryIndex > 0) {
+      this.galleryIndex--;
+    }
+  }
+
 
   async loadProfileData() {
     const user = this.auth.getCurrentUser();
@@ -727,12 +758,6 @@ isPlanButtonDisabled(plan: any): boolean {
       this.avatar = null;
 
       this.closeAllOffcanvas();
-
-      setTimeout(() => {
-        this.isSaving = false;
-        this.isEditProfile = false;
-      }, 200);
-      this.isSaving = false;
       this.isEditProfile = false;
 
       Swal.close();
@@ -757,6 +782,8 @@ isPlanButtonDisabled(plan: any): boolean {
         text: error?.message || 'Ocurrió un error al guardar los cambios',
         confirmButtonText: 'Aceptar'
       });
+    } finally {
+      this.isSaving = false;
     }
   }
   private normalizeStringArray(value: any): string[] {
@@ -808,9 +835,19 @@ isPlanButtonDisabled(plan: any): boolean {
   }
 
   onPhotoSelected(event: any, index: number) {
-    const file = event.target.files[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (file) {
-      // Crear URL temporal para previsualización
+      if (!this.isAllowedImage(file)) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Formato no permitido',
+          text: 'Usa JPG, PNG o WEBP.'
+        });
+        input.value = '';
+        return;
+      }
+
       const url = URL.createObjectURL(file);
       this.photos[index] = {
         url: url,
@@ -822,14 +859,30 @@ isPlanButtonDisabled(plan: any): boolean {
   onAvatarSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files[0]) {
-      this.avatar = input.files[0];
+      const file = input.files[0];
+
+      if (!this.isAllowedImage(file)) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Formato no permitido',
+          text: 'Usa JPG, PNG o WEBP.'
+        });
+        input.value = '';
+        return;
+      }
+
+      this.avatar = file;
 
       const reader = new FileReader();
       reader.onload = (e) => {
         this.avatarPreview = e.target?.result ?? null;
       };
-      reader.readAsDataURL(this.avatar);
+      reader.readAsDataURL(file);
     }
+  }
+
+  private isAllowedImage(file: File): boolean {
+    return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
   }
   async uploadAvatarFile(): Promise<any> {
     if (!this.avatar) return null;

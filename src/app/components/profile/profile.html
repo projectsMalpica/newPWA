@@ -134,11 +134,17 @@
 
           </div>
           <div class="gallery-section">
+            <div class="empty-gallery-state" *ngIf="!visiblePhotos.length">
+              Aún no tienes fotos en tu galería.
+            </div>
             <div class="row g-2 m-b30" data-masonry='{"percentPosition": true }'>
-              <div class="col-4" *ngFor="let photo of photos; let i = index">
+              <div class="col-4" *ngFor="let photo of visiblePhotos; let i = index">
                 <div class="photo-container">
-                  <div class="photo-preview" [ngStyle]="{'background-image': 'url(' + photo.url + ')'}">
-                  </div>
+                  <button type="button" class="photo-preview gallery-photo-button"
+                    [ngStyle]="{'background-image': 'url(' + photo.url + ')'}"
+                    (click)="openGallery(i)">
+                    <span class="main-photo-badge" *ngIf="i === 0">Principal</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -429,6 +435,27 @@
         {{ isSaving ? 'Guardando...' : 'Guardar' }}
       </button>
     </div>
+  </div>
+</div>
+
+<div class="gallery-overlay" *ngIf="galleryOpen" (click)="closeGallery()">
+  <button type="button" class="gallery-close" (click)="closeGallery()">×</button>
+
+  <button type="button" class="gallery-arrow left" *ngIf="galleryIndex > 0"
+    (click)="$event.stopPropagation(); prevPhoto()">
+    ❮
+  </button>
+
+  <img class="gallery-image" [src]="visiblePhotos[galleryIndex]?.url" alt="Foto de perfil"
+    (click)="$event.stopPropagation()">
+
+  <button type="button" class="gallery-arrow right" *ngIf="galleryIndex < visiblePhotos.length - 1"
+    (click)="$event.stopPropagation(); nextPhoto()">
+    ❯
+  </button>
+
+  <div class="gallery-counter">
+    {{galleryIndex + 1}} / {{visiblePhotos.length}}
   </div>
 </div>
 

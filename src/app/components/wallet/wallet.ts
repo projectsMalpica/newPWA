@@ -4,12 +4,14 @@ import { Router } from '@angular/router';
 import { GlobalService } from '../../services/global.service';
 import { WompiService } from '../../services/wompi.service';
 import { AuthPocketbaseService } from '../../services/authPocketbase.service';
+import { FormsModule } from '@angular/forms';
 
 interface WalletPackage {
   id: string;
   name: string;
   credits: number;
   price: number;
+  priceUsd: number;
   bonus?: number;
   theme: 'plus' | 'gold' | 'platinum';
 }
@@ -17,12 +19,13 @@ interface WalletPackage {
 @Component({
   selector: 'app-wallet',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './wallet.html',
   styleUrl: './wallet.scss',
 })
 export class Wallet implements OnInit {
 activePackageId: string = 'basic';
+  pendingRecharge: any = null;
 
   currentBalance = 0;
 currentWallet: any = null;
@@ -36,6 +39,7 @@ currentWallet: any = null;
       name: 'Wallet Básica',
       credits: 10000,
       price: 10000,
+      priceUsd: 3,
       bonus: 0,
       theme: 'plus'
     },
@@ -44,6 +48,7 @@ currentWallet: any = null;
       name: 'Wallet Smart',
       credits: 25000,
       price: 25000,
+      priceUsd: 7,
       bonus: 3000,
       theme: 'gold'
     },
@@ -52,6 +57,7 @@ currentWallet: any = null;
       name: 'Wallet Pro',
       credits: 50000,
       price: 50000,
+      priceUsd: 13,
       bonus: 8000,
       theme: 'platinum'
     }
@@ -81,6 +87,20 @@ currentWallet: any = null;
       'Consulta tus movimientos completos'
     ]
   };
+  manualPaymentMethod: 'binance' = 'binance';
+  manualProofFile: File | null = null;
+  manualProofPreview = '';
+  manualPaymentNotes = '';
+  isUploadingManualProof = false;
+
+  manualPaymentMethods = [
+    {
+      id: 'binance',
+      name: 'Binance Pay',
+      description: 'Pago manual en USD por Binance Pay.',
+      account: '51335354'
+    }
+  ];
 
   constructor(private router: Router, 
     private global: GlobalService,
@@ -91,6 +111,7 @@ currentWallet: any = null;
   ) {}
 async ngOnInit(): Promise<void> {
   await this.loadWallet();
+  await this.loadPendingRecharge();
 }
 
 async loadWallet(): Promise<void> {
@@ -120,6 +141,22 @@ async loadWallet(): Promise<void> {
   }
     this.cdr.detectChanges();
 }
+
+  async loadPendingRecharge(): Promise<void> {
+    const userId = this.auth.currentUser?.id;
+    if (!userId) return;
+
+    this.pendingRecharge = await this.global.pb
+      .collection('wallet_recharge_proofs')
+      .getFirstListItem(`userId="${userId}" && status="pending"`, {
+        sort: '-created',
+        requestKey: null
+      })
+      .catch(() => null);
+
+    this.cdr.detectChanges();
+  }
+
   get activePackage(): WalletPackage | undefined {
     return this.packages.find(pkg => pkg.id === this.activePackageId);
   }
@@ -148,14 +185,22 @@ async loadWallet(): Promise<void> {
   }
 
   closeRechargeModal() {
-    if (this.isProcessingRecharge) return;
+    if (this.isProcessingRecharge || this.isUploadingManualProof) return;
     this.showRechargeModal = false;
     this.selectedRechargePackage = null;
+    this.resetManualRechargeState();
   }
 
-  private generateReference(pkg: WalletPackage): string {
-    const timestamp = Date.now();
-    return `wallet_${pkg.id}_${timestamp}`;
+  getCopAmount(pkg: WalletPackage): string {
+    return `$ ${pkg.price.toLocaleString('es-CO')} COP`;
+  }
+
+  getUsdAmount(pkg: WalletPackage): string {
+    return `$${pkg.priceUsd.toLocaleString('en-US')} USD`;
+  }
+
+  getManualCreditAmount(pkg: WalletPackage): number {
+    return Number(pkg.credits || 0) + Number(pkg.bonus || 0);
   }
 
  async confirmRecharge() {
@@ -221,4 +266,99 @@ this.cdr.detectChanges();
     this.selectedRechargePackage = null;
   }
 }
+
+  confirmRechargeFromSelected(): void {
+    const selected = this.activePackage;
+    if (!selected) return;
+
+    this.selectedRechargePackage = selected;
+    this.confirmRecharge();
+  }
+
+  openManualRecharge(): void {
+    const selected = this.activePackage;
+    if (!selected) return;
+
+    this.selectedRechargePackage = selected;
+    this.showRechargeModal = true;
+  }
+
+  onManualProofSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Formato no permitido. Usa JPG, PNG, WEBP o PDF.');
+      input.value = '';
+      return;
+    }
+
+    this.manualProofFile = file;
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.manualProofPreview = String(reader.result);
+        this.cdr.detectChanges();
+      };
+      reader.readAsDataURL(file);
+    } else {
+      this.manualProofPreview = '';
+    }
+  }
+
+  async submitManualRecharge(): Promise<void> {
+    if (!this.selectedRechargePackage || !this.manualProofFile || this.isUploadingManualProof) return;
+
+    const userId = this.auth.currentUser?.id;
+    if (!userId || !this.currentWallet?.id) {
+      alert('No se pudo identificar la wallet del usuario.');
+      return;
+    }
+
+    try {
+      this.isUploadingManualProof = true;
+      const pkg = this.selectedRechargePackage;
+      const creditsToApply = this.getManualCreditAmount(pkg);
+
+      const formData = new FormData();
+      formData.append('userId', userId);
+      formData.append('walletId', this.currentWallet.id);
+      formData.append('packageId', pkg.id);
+      formData.append('packageName', pkg.name);
+      formData.append('price', String(pkg.price));
+      formData.append('priceUsd', String(pkg.priceUsd));
+      formData.append('credits', String(creditsToApply));
+      formData.append('bonus', String(pkg.bonus || 0));
+      formData.append('currency', 'USD');
+      formData.append('amountPaid', String(pkg.priceUsd));
+      formData.append('paymentMethod', this.manualPaymentMethod);
+      formData.append('status', 'pending');
+      formData.append('adminNotes', this.manualPaymentNotes || '');
+      formData.append('proofImage', this.manualProofFile);
+
+      await this.global.pb.collection('wallet_recharge_proofs').create(formData, {
+        requestKey: null
+      });
+
+      await this.loadPendingRecharge();
+      this.showRechargeModal = false;
+      this.selectedRechargePackage = null;
+      this.resetManualRechargeState();
+    } catch (error) {
+      console.error('Error enviando comprobante:', error);
+      alert('No se pudo enviar el comprobante.');
+    } finally {
+      this.isUploadingManualProof = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private resetManualRechargeState(): void {
+    this.manualProofFile = null;
+    this.manualProofPreview = '';
+    this.manualPaymentNotes = '';
+  }
 }

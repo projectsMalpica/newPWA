@@ -31,6 +31,9 @@ export class Detailprofilelocal {
   selectedReceiverUserId = '';
   giftMessage = '';
   giftPaymentMethod: 'wallet' | 'wompi' = 'wallet';
+  purchaseMode: 'product' | 'ticket' = 'product';
+  paymentProofFile: File | null = null;
+  manualPaymentPending = false;
   walletBalance = 0;
   currentWallet: any = null;
   giftReceivers: any[] = [];
@@ -44,6 +47,8 @@ export class Detailprofilelocal {
   partnerStats: any = null;
 currentVisitors = 0;
 todayVisitors = 0;
+  galleryOpen = false;
+  galleryIndex = 0;
   constructor(public global: GlobalService,
     public changeDetectorRef: ChangeDetectorRef,
     public auth: AuthPocketbaseService,
@@ -198,6 +203,27 @@ todayVisitors = 0;
   }
 
   async buyTicket(): Promise<void> {
+    this.purchaseMode = 'ticket';
+    this.selectedGiftProduct = {
+      id: this.partner.id,
+      name: this.partner.ticketDescription || 'Entrada',
+      category: 'Entrada',
+      price: Number(this.partner.ticketPrice || 0),
+      currency: this.partner.ticketCurrency || 'COP',
+      country: this.partner.ticketCountry || this.partner.country || 'CO',
+      image: this.avatarUrl || this.partner.files?.[0] || '',
+    };
+    this.selectedReceiverUserId = '';
+    this.giftMessage = '';
+    this.paymentProofFile = null;
+    this.giftSentSuccess = false;
+    this.manualPaymentPending = false;
+    this.showGiftModal = true;
+    await this.loadWallet();
+    this.changeDetectorRef.detectChanges();
+  }
+
+  async buyTicketWithWallet(): Promise<void> {
     try {
       this.isBuyingTicket = true;
 
@@ -453,11 +479,39 @@ todayVisitors = 0;
     return [];
   }
 
+  openGallery(index: number): void {
+    if (!this.partner?.files?.length) return;
+
+    this.galleryIndex = Math.max(0, Math.min(index, this.partner.files.length - 1));
+    this.galleryOpen = true;
+  }
+
+  closeGallery(): void {
+    this.galleryOpen = false;
+  }
+
+  nextPhoto(): void {
+    if (!this.partner?.files?.length) return;
+
+    if (this.galleryIndex < this.partner.files.length - 1) {
+      this.galleryIndex++;
+    }
+  }
+
+  prevPhoto(): void {
+    if (this.galleryIndex > 0) {
+      this.galleryIndex--;
+    }
+  }
+
   async openGiftModal(product: any): Promise<void> {
+    this.purchaseMode = 'product';
     this.selectedGiftProduct = product;
     this.selectedReceiverUserId = '';
     this.giftMessage = '';
     this.giftPaymentMethod = 'wallet';
+    this.paymentProofFile = null;
+    this.manualPaymentPending = false;
     this.showGiftModal = true;
 
     await Promise.all([
@@ -476,6 +530,9 @@ todayVisitors = 0;
   this.selectedReceiverUserId = '';
   this.giftMessage = '';
   this.giftSentSuccess = false;
+  this.paymentProofFile = null;
+  this.manualPaymentPending = false;
+  this.purchaseMode = 'product';
 
   if (!force) {
     this.lastRedeemCode = '';
@@ -728,6 +785,196 @@ this.changeDetectorRef.detectChanges();
       this.changeDetectorRef.detectChanges();
     }
   }
+
+  isTicketPurchase(): boolean {
+    return this.purchaseMode === 'ticket';
+  }
+
+  isManualPaymentTicket(): boolean {
+    return this.partner?.ticketCountry === 'VE'
+      || this.partner?.ticketCurrency === 'VES'
+      || this.partner?.ticketCurrency === 'USD';
+  }
+
+  isManualPaymentProduct(product: any): boolean {
+    return product?.country === 'VE' || product?.currency === 'VES' || product?.currency === 'USD';
+  }
+
+  isManualCurrentPurchase(): boolean {
+    return this.isTicketPurchase()
+      ? this.isManualPaymentTicket()
+      : this.isManualPaymentProduct(this.selectedGiftProduct);
+  }
+
+  getMoneyLabel(amount: number, currency = 'COP'): string {
+    const value = Number(amount || 0);
+
+    if (currency === 'VES') {
+      return `${value.toLocaleString('es-VE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })} Bs`;
+    }
+
+    if (currency === 'USD') {
+      return `${value.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })} USD`;
+    }
+
+    return `${value.toLocaleString('es-CO', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    })} COP`;
+  }
+
+  onPaymentProofSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] || null;
+
+    if (!file) {
+      this.paymentProofFile = null;
+      return;
+    }
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+    if (!allowed.includes(file.type)) {
+      this.toastService.show('Usa JPG, PNG, WEBP o PDF.', 'error');
+      input.value = '';
+      this.paymentProofFile = null;
+      return;
+    }
+
+    this.paymentProofFile = file;
+  }
+
+  async confirmCurrentPurchase(): Promise<void> {
+    if (this.isTicketPurchase()) {
+      if (this.isManualPaymentTicket()) {
+        await this.buyTicketManualPayment();
+        return;
+      }
+
+      await this.buyTicketWithWallet();
+      return;
+    }
+
+    if (this.isManualPaymentProduct(this.selectedGiftProduct)) {
+      await this.sendGiftManualPayment();
+      return;
+    }
+
+    await this.sendGift();
+  }
+
+  async buyTicketManualPayment(): Promise<void> {
+    if (!this.paymentProofFile || !this.partner?.id) {
+      this.toastService.show('Debes subir el comprobante de pago.', 'error');
+      return;
+    }
+
+    try {
+      this.isBuyingTicket = true;
+      const user = this.auth.currentUser;
+
+      if (!user?.id) {
+        this.toastService.show('Debes iniciar sesión para comprar entrada.', 'error');
+        return;
+      }
+
+      const redeemCode = this.generateRedeemCode('TICKET');
+      const formData = new FormData();
+
+      formData.append('partnerId', this.partner.id);
+      formData.append('buyerUserId', user.id);
+      formData.append('productName', 'Entrada');
+      formData.append('itemId', this.partner.id);
+      formData.append('itemName', this.partner.ticketDescription || `Entrada - ${this.partner.venueName}`);
+      formData.append('amount', String(this.partner.ticketPrice || 0));
+      formData.append('country', this.partner.ticketCountry || this.partner.country || 'VE');
+      formData.append('currency', this.partner.ticketCurrency || 'VES');
+      formData.append('status', 'pending');
+      formData.append('paymentMethod', 'manual');
+      formData.append('message', 'Compra de entrada pendiente de validación');
+      formData.append('redeemCode', redeemCode);
+      formData.append('proofFile', this.paymentProofFile);
+
+      await this.pb.collection('ticket_payment_proofs').create(formData, {
+        requestKey: null
+      });
+
+      this.lastTicketCode = redeemCode;
+      this.lastRedeemCode = redeemCode;
+      this.manualPaymentPending = true;
+      this.giftSentSuccess = true;
+      this.paymentProofFile = null;
+      this.toastService.show('Comprobante enviado. Queda pendiente de aprobación.', 'success');
+    } catch (error) {
+      console.error('Error enviando comprobante de entrada:', error);
+      this.toastService.show('No se pudo enviar el comprobante.', 'error');
+    } finally {
+      this.isBuyingTicket = false;
+      this.changeDetectorRef.detectChanges();
+    }
+  }
+
+  async sendGiftManualPayment(): Promise<void> {
+    if (!this.selectedGiftProduct || !this.paymentProofFile || !this.partner?.id) {
+      this.toastService.show('Debes subir el comprobante de pago.', 'error');
+      return;
+    }
+
+    try {
+      this.isSendingGift = true;
+      const user = this.auth.currentUser;
+
+      if (!user?.id) {
+        this.toastService.show('Debes iniciar sesión.', 'error');
+        return;
+      }
+
+      const redeemCode = `ONGO-${Date.now().toString().slice(-6)}`;
+      const amount = Number(this.selectedGiftProduct.price || 0);
+      const currency = this.selectedGiftProduct.currency || 'VES';
+
+      const formData = new FormData();
+      formData.append('partnerId', this.partner.id);
+      formData.append('buyerUserId', user.id);
+      formData.append('receiverUserId', this.selectedReceiverUserId || user.id);
+      formData.append('productId', this.selectedGiftProduct.id);
+      formData.append('productName', this.selectedGiftProduct.name || '');
+      formData.append('amount', String(amount));
+      formData.append('currency', currency);
+      formData.append('country', this.selectedGiftProduct.country || 'VE');
+      formData.append('paymentMethod', 'manual');
+      formData.append('status', 'pending');
+      formData.append('message', this.giftMessage || '');
+      formData.append('redeemCode', redeemCode);
+      formData.append('proofFile', this.paymentProofFile);
+      formData.append('amountUSD', currency === 'USD' ? String(amount) : '0');
+      formData.append('amountBs', currency === 'VES' ? String(amount) : '0');
+      formData.append('bcvRate', '0');
+
+      await this.pb.collection('product_payment_proofs').create(formData, {
+        requestKey: null
+      });
+
+      this.manualPaymentPending = true;
+      this.giftSentSuccess = true;
+      this.lastRedeemCode = redeemCode;
+      this.paymentProofFile = null;
+      this.toastService.show('Comprobante enviado. Queda pendiente de validación.', 'success');
+    } catch (error) {
+      console.error('Error enviando pago manual:', error);
+      this.toastService.show('No se pudo enviar el comprobante.', 'error');
+    } finally {
+      this.isSendingGift = false;
+      this.changeDetectorRef.detectChanges();
+    }
+  }
+
   copyRedeemCode(): void {
   if (!this.lastRedeemCode) return;
 

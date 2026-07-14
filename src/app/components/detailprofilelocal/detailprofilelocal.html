@@ -177,12 +177,34 @@
       <h6>Galería</h6>
 
       <div class="gallery-grid">
-        <a *ngFor="let url of partner.files" [href]="url" target="_blank">
+        <button type="button" class="gallery-item" *ngFor="let url of partner.files; let i = index"
+          (click)="openGallery(i)">
           <img [src]="url" alt="Imagen del local">
-        </a>
+        </button>
       </div>
     </div>
 
+  </div>
+</div>
+
+<div class="gallery-overlay" *ngIf="galleryOpen" (click)="closeGallery()">
+  <button type="button" class="gallery-close" (click)="closeGallery()">×</button>
+
+  <button type="button" class="gallery-arrow left" *ngIf="galleryIndex > 0"
+    (click)="$event.stopPropagation(); prevPhoto()">
+    ❮
+  </button>
+
+  <img class="gallery-image" [src]="partner.files[galleryIndex]" alt="Imagen del local"
+    (click)="$event.stopPropagation()">
+
+  <button type="button" class="gallery-arrow right" *ngIf="galleryIndex < partner.files.length - 1"
+    (click)="$event.stopPropagation(); nextPhoto()">
+    ❯
+  </button>
+
+  <div class="gallery-counter">
+    {{ galleryIndex + 1 }} / {{ partner.files.length }}
   </div>
 </div>
 
@@ -275,15 +297,40 @@
       <div class="gift-payment-methods">
         <label>Método de pago</label>
 
-        <div class="payment-option active">
-          <span>Wallet</span>
-          <strong>Saldo: {{ walletBalance | number:'1.0-0' }} COP</strong>
-        </div>
+        <ng-container *ngIf="!isManualCurrentPurchase()">
+          <div class="payment-option active">
+            <span>Wallet</span>
+            <strong>Saldo: {{ walletBalance | number:'1.0-0' }} COP</strong>
+          </div>
 
-        <div class="payment-option" (click)="goToWalletRecharge()">
-          <span>Recargar wallet</span>
-          <strong>Agregar saldo</strong>
-        </div>
+          <div class="payment-option" (click)="goToWalletRecharge()">
+            <span>Recargar wallet</span>
+            <strong>Agregar saldo</strong>
+          </div>
+        </ng-container>
+
+        <ng-container *ngIf="isManualCurrentPurchase()">
+          <div class="manual-payment-box">
+            <h6>Pago manual</h6>
+            <p>
+              Total:
+              <strong>{{ getMoneyLabel(selectedGiftProduct?.price, selectedGiftProduct?.currency) }}</strong>
+            </p>
+            <p><strong>Banco:</strong> {{ partner.paymentMethods?.[0]?.bank || 'Banco no definido' }}</p>
+            <p><strong>Titular:</strong> {{ partner.paymentMethods?.[0]?.holder || 'No definido' }}</p>
+            <p><strong>Documento:</strong> {{ partner.paymentMethods?.[0]?.document || 'No definido' }}</p>
+            <p *ngIf="partner.paymentMethods?.[0]?.phone">
+              <strong>Teléfono pago móvil:</strong> {{ partner.paymentMethods?.[0]?.phone }}
+            </p>
+            <p *ngIf="partner.paymentMethods?.[0]?.accountNumber">
+              <strong>Cuenta:</strong>
+              {{ partner.paymentMethods?.[0]?.accountType }}
+              {{ partner.paymentMethods?.[0]?.accountNumber }}
+            </p>
+            <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp,application/pdf"
+              (change)="onPaymentProofSelected($event)">
+          </div>
+        </ng-container>
       </div>
 
       <div class="gift-confirm-info">
@@ -291,8 +338,16 @@
         <span>Confirma tu compra o regalo</span>
       </div>
 
-      <button type="button" class="send-gift-btn" [disabled]="isSendingGift" (click)="sendGift()">
-        {{ isSendingGift ? 'Procesando...' : 'Confirmar compra / Enviar regalo 🎁' }}
+      <button type="button" class="send-gift-btn"
+        [disabled]="isSendingGift || isBuyingTicket || (isManualCurrentPurchase() && !paymentProofFile)"
+        (click)="confirmCurrentPurchase()">
+        {{
+          (isSendingGift || isBuyingTicket)
+            ? 'Procesando...'
+            : isManualCurrentPurchase()
+              ? (isTicketPurchase() ? 'Enviar comprobante de entrada' : 'Enviar comprobante y reservar compra')
+              : (isTicketPurchase() ? 'Comprar entrada' : 'Confirmar compra / Enviar regalo 🎁')
+        }}
       </button>
 
     </ng-template>

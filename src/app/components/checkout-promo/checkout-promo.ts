@@ -1,14 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import PocketBase from 'pocketbase';
 import { AuthPocketbaseService } from '../../services/authPocketbase.service';
 import { PushApiService } from '../../services/push-api.service';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-checkout-promo',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './checkout-promo.html',
   styleUrl: './checkout-promo.scss',
 })
@@ -23,6 +24,8 @@ export class CheckoutPromo implements OnInit {
   loading = false;
   error = '';
   promoOrderSuccess = false;
+  paymentProofFile: File | null = null;
+  partnerPaymentMethods: any[] = [];
 
 
   constructor(
@@ -61,6 +64,7 @@ export class CheckoutPromo implements OnInit {
 
     if (id) {
       await this.loadPromo(id);
+      await this.loadPartnerPaymentMethods();
     }
 
     if (!this.currentUser?.id) {
@@ -98,6 +102,57 @@ export class CheckoutPromo implements OnInit {
 
   getAmount(): number {
     return Number(this.promo?.price || this.promo?.amount || 0);
+  }
+
+  getMoneyLabel(amount: number, currency = 'COP'): string {
+    const value = Number(amount || 0);
+
+    if (currency === 'VES') {
+      return `${value.toLocaleString('es-VE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })} Bs`;
+    }
+
+    if (currency === 'USD') {
+      return `${value.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })} USD`;
+    }
+
+    return `${value.toLocaleString('es-CO', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    })} COP`;
+  }
+
+  isManualPromo(): boolean {
+    return this.promo?.country === 'VE'
+      || this.promo?.currency === 'VES'
+      || this.promo?.currency === 'USD';
+  }
+
+  onPaymentProofSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] || null;
+
+    if (!file) {
+      this.paymentProofFile = null;
+      return;
+    }
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+    if (!allowed.includes(file.type)) {
+      this.error = 'Formato no permitido. Usa JPG, PNG, WEBP o PDF.';
+      input.value = '';
+      this.paymentProofFile = null;
+      return;
+    }
+
+    this.error = '';
+    this.paymentProofFile = file;
   }
 
   async createPromoOrder(): Promise<void> {
@@ -249,6 +304,92 @@ type: 'purchase',
           error?.response?.message ||
           'No se pudo crear la orden de promoción.';
       }
+    } finally {
+      this.loading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async loadPartnerPaymentMethods(): Promise<void> {
+    if (!this.promo?.userId) return;
+
+    try {
+      const partner = await this.pb.collection('usuariosPartner').getFirstListItem(
+        `userId="${this.promo.userId}"`,
+        { requestKey: null }
+      );
+
+      this.partnerPaymentMethods = Array.isArray(partner['paymentMethods'])
+        ? partner['paymentMethods']
+        : [];
+    } catch (error) {
+      console.error('Error cargando metodos de pago del local:', error);
+      this.partnerPaymentMethods = [];
+    }
+  }
+
+  async createPromoManualOrder(): Promise<void> {
+    if (this.loading) return;
+
+    this.error = '';
+
+    if (!this.paymentProofFile) {
+      this.error = 'Debes subir el comprobante de pago.';
+      return;
+    }
+
+    this.loading = true;
+
+    try {
+      const user =
+        this.auth.currentUser ||
+        this.auth.pb.authStore.record ||
+        this.auth.pb.authStore.model;
+
+      if (!user?.id) {
+        this.error = 'Debes iniciar sesión.';
+        return;
+      }
+
+      if (!this.promo?.id) {
+        this.error = 'No se encontró la promoción.';
+        return;
+      }
+
+      const partnerProfile = await this.pb.collection('usuariosPartner').getFirstListItem(
+        `userId="${this.promo.userId}"`,
+        { requestKey: null }
+      );
+
+      const formData = new FormData();
+
+      formData.append('partnerId', partnerProfile.id);
+      formData.append('buyerUserId', user.id);
+      formData.append('productName', 'Promoción');
+      formData.append('amount', String(this.getAmount()));
+      formData.append('country', this.promo.country || 'VE');
+      formData.append('currency', this.promo.currency || 'USD');
+      formData.append('status', 'pending');
+      formData.append('message', `Compra manual de promoción: ${this.promo.name}`);
+      formData.append('paymentMethod', 'manual');
+      formData.append('itemId', this.promo.id);
+      formData.append('itemName', this.promo.name || 'Promoción');
+      formData.append('redeemCode', '');
+      formData.append('proofFile', this.paymentProofFile);
+
+      await this.pb.collection('ticket_payment_proofs').create(formData, {
+        requestKey: null
+      });
+
+      this.lastRedeemCode = '';
+      this.promoOrderSuccess = true;
+      this.paymentProofFile = null;
+    } catch (error: any) {
+      console.error('Error creando pago manual promo:', error);
+      this.error =
+        error?.response?.message ||
+        error?.message ||
+        'No se pudo enviar el comprobante.';
     } finally {
       this.loading = false;
       this.cdr.detectChanges();

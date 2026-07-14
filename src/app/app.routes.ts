@@ -63,6 +63,24 @@ export const routes: Routes = [
     title: 'Ongo admin'
   },
   {
+    path: 'admin-clientes',
+    loadComponent: () =>
+      import('./components/admin-clientes/admin-clientes').then(c => c.AdminClientes),
+    title: 'Admin clientes'
+  },
+  {
+    path: 'admin-locales',
+    loadComponent: () =>
+      import('./components/admin-locales/admin-locales').then(c => c.AdminLocales),
+    title: 'Admin locales'
+  },
+  {
+    path: 'admin-payments',
+    loadComponent: () =>
+      import('./components/admin-payments/admin-payments').then(c => c.AdminPayments),
+    title: 'Admin pagos'
+  },
+  {
     path: 'maps',
     loadComponent: () =>
       import('./components/maps/maps').then(c => c.Maps),
@@ -96,6 +114,12 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./components/profile-local/profile-local').then(c => c.ProfileLocal),
     title: 'Perfil local'
+  },
+  {
+    path: 'partner-pending-orders',
+    loadComponent: () =>
+      import('./components/partner-pending-orders/partner-pending-orders').then(c => c.PartnerPendingOrders),
+    title: 'Comprobantes pendientes'
   },
   {
     path: 'detailprofile',

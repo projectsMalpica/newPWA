@@ -722,8 +722,8 @@ Ventas hoy
           <button type="button" class="btn btn-light flex-grow-1" (click)="cancelEdit()">
             Cancelar
           </button>
-          <button type="button" class="btn btn-primary flex-grow-1" (click)="saveProfile()">
-            Guardar
+          <button type="button" class="btn btn-primary flex-grow-1" [disabled]="isSavingProfile" (click)="saveProfile()">
+            {{ isSavingProfile ? 'Guardando...' : 'Guardar' }}
           </button>
         </div>
       </div>
